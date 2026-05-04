@@ -1,2 +1,2 @@
 # HK-weather-app
-a simple mobile app that can show real time weather information in traditional chinese.
+a simple mobile app that can show real time weather information in traditional chinese. The data can be got from Hong Kong observatory.  The app should include today's weather, tomorrow and the day after tomorrow weather.  The weather information include date (western and chinese calendar), time and sun shine/raining at each hours.  The final app should be able to be installed on mobile with an icon for execution. The colour of the background of the app should be dark blue and all the fonts used are either yellow or white colour.  A simple symbol should be used to show whether it is sunny/ rain/ strong wind etc.
