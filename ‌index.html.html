@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>香港天氣</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0A192F">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    :root {
+      --bg: #0A192F;
+      --text: #FFFFFF;
+      --accent: #FFD700;
+      --card: rgba(255,255,255,0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 40px; }
+    header { padding: 20px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+    header h1 { font-size: 1.4rem; color: var(--accent); font-weight: 600; }
+    header p { font-size: 0.8rem; color: #8899aa; margin-top: 4px; }
+    .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+    .day-section { margin-bottom: 24px; background: var(--card); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.05); }
+    .date-line { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+    .date-western { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+    .date-lunar { font-size: 0.85rem; color: var(--accent); }
+    .hourly-grid { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow-y: auto; padding-right: 4px; }
+    .hourly-row { display: flex; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; }
+    .hourly-time { width: 60px; font-weight: 600; color: var(--text); }
+    .hourly-icon { width: 36px; text-align: center; font-size: 1.2rem; margin: 0 12px; }
+    .hourly-desc { flex: 1; color: #c0c8d0; font-size: 0.95rem; }
+    .loading, .error { text-align: center; padding: 40px; color: var(--accent); font-size: 1rem; }
+    .error { color: #ff6b6b; }
+    /* Scrollbar styling */
+    .hourly-grid::-webkit-scrollbar { width: 4px; }
+    .hourly-grid::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.4); border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🌤 香港實時天氣</h1>
+    <p>資料來源：香港天文台 Open Data</p>
+  </header>
+
+  <div class="container" id="app">
+    <div class="loading">⏳ 載入天氣資料中...</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.js"></script>
+  <script>
+    // Weather icon mapping
+    const iconMap = {
+      '晴': '☀️', '多雲': '⛅', '局部多雲': '⛅', '陰': '☁️',
+      '有雨': '🌧️', '雨': '🌧️', '大雨': '🌧️', '雷暴': '⛈️',
+      '強風': '💨', '烈風': '💨', '霧': '🌫️', '薄霧': '🌫️',
+      '天晴': '☀️', '陽光充沛': '☀️', '短暫陣雨': '🌦️'
+    };
+
+    function getWeatherIcon(desc) {
+      for (const key in iconMap) {
+        if (desc.includes(key)) return iconMap[key];
+      }
+      return '🌤️';
+    }
+
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      const western = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+      try {
+        const lunar = Lunar.fromDate(d);
+        const lunarStr = `${lunar.getYearInChinese()}年${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`;
+        return { western, lunar: lunarStr };
+      } catch {
+        return { western, lunar: '' };
+      }
+    }
+
+    async function fetchHKOData() {
+      const container = document.getElementById('app');
+      try {
+        // HKO API (Note: CORS may require a proxy in browser. Fallback to mock if fails)
+        const res = await fetch('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataSource=rhrread&lang=tc');
+        if (!res.ok) throw new Error('API 請求失敗');
+        const data = await res.json();
+
+        if (!data.forecastData) throw new Error('資料格式異常');
+
+        // Group by date
+        const grouped = {};
+        data.forecastData.forEach(item => {
+          const date = item.time.split('T')[0];
+          if (!grouped[date]) grouped[date] = [];
+          grouped[date].push({
+            time: item.time.split('T')[1].substring(0, 5),
+            weather: item.weather || '',
+            wind: item.windSpeed || ''
+          });
+        });
+
+        const dates = Object.keys(grouped).sort().slice(0, 3); // Today, +1, +2
+        if (dates.length === 0) throw new Error('無可用預報資料');
+
+        container.innerHTML = '';
+        dates.forEach((date, idx) => {
+          const { western, lunar } = formatDate(date);
+          const dayLabel = idx === 0 ? '今日' : idx === 1 ? '明日' : '後日';
+          
+          const section = document.createElement('div');
+          section.className = 'day-section';
+          section.innerHTML = `
+            <div class="date-line">
+              <span class="date-western">${dayLabel} ${western}</span>
+              <span class="date-lunar">${lunar}</span>
+            </div>
+            <div class="hourly-grid" id="hours-${idx}"></div>
+          `;
+          container.appendChild(section);
+
+          const grid = document.getElementById(`hours-${idx}`);
+          grouped[date].forEach(h => {
+            const row = document.createElement('div');
+            row.className = 'hourly-row';
+            row.innerHTML = `
+              <span class="hourly-time">${h.time}</span>
+              <span class="hourly-icon">${getWeatherIcon(h.weather)}</span>
+              <span class="hourly-desc">${h.weather}${h.wind ? ' | 風速' + h.wind : ''}</span>
+            `;
+            grid.appendChild(row);
+          });
+        });
+      } catch (err) {
+        console.error(err);
+        container.innerHTML = `
+          <div class="error">
+            ⚠️ 無法連線至天文台伺服器<br>
+            <small style="color:#8899aa;margin-top:8px;display:block;">提示：請確保已連線網絡，或於支援 HTTPS 的環境部署</small>
+          </div>
+        `;
+      }
+    }
+
+    fetchHKOData();
+  </script>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(() => console.log('Service Worker 已註冊'))
+        .catch(err => console.error('SW 註冊失敗:', err));
+    }
+  </script>
+</body>
+</html>
